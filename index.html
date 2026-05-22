@@ -76,15 +76,11 @@
           <div class="scenario-grid" id="scenario-grid"></div>
         </div>
         <div class="card">
-          <div class="card-label">ABWEICHUNGEN &amp; ANMERKUNGEN</div>
-          <div class="tag-row" id="deviation-tags">
-            <button class="tag" data-tag="Szenario verkürzt">Szenario verkürzt</button>
-            <button class="tag" data-tag="Techn. Fehler">Techn. Fehler</button>
-            <button class="tag" data-tag="Proband abgebrochen">Abbruch</button>
-            <button class="tag" data-tag="Setup-Abweichung">Setup-Abw.</button>
-            <button class="tag" data-tag="Proband unsicher">Unsicher</button>
-            <button class="tag" data-tag="Szenario wiederholt">Wiederholt</button>
+          <div class="card-label-row">
+            <span class="card-label" style="margin-bottom:0">ABWEICHUNGEN &amp; ANMERKUNGEN</span>
+            <button class="btn-text" id="btn-manage-tags">⚙ Tags</button>
           </div>
+          <div class="tag-row" id="deviation-tags"></div>
           <textarea id="session-notes" rows="3" placeholder="Notizen…" style="margin-top:10px"></textarea>
         </div>
         <div class="card timer-card">
@@ -208,14 +204,7 @@
           </div>
         </div>
         <label class="field-label">Abweichungen</label>
-        <div class="tag-row" id="edit-deviation-tags">
-          <button class="tag" data-tag="Szenario verkürzt">Szenario verkürzt</button>
-          <button class="tag" data-tag="Techn. Fehler">Techn. Fehler</button>
-          <button class="tag" data-tag="Proband abgebrochen">Abbruch</button>
-          <button class="tag" data-tag="Setup-Abweichung">Setup-Abw.</button>
-          <button class="tag" data-tag="Proband unsicher">Unsicher</button>
-          <button class="tag" data-tag="Szenario wiederholt">Wiederholt</button>
-        </div>
+        <div class="tag-row" id="edit-deviation-tags"></div>
         <label class="field-label">Anmerkungen</label>
         <textarea id="edit-notes" rows="3"></textarea>
       </div>
@@ -266,6 +255,22 @@
         <label class="field-label" for="new-scenario-icon">Icon (Emoji)</label>
         <input type="text" id="new-scenario-icon" placeholder="z.B. 🔥" maxlength="2">
         <button class="btn btn-primary full-width" id="btn-add-scenario" style="margin-top:10px">+ Hinzufügen</button>
+      </div>
+    </div>
+  </div>
+  <!-- Tag Manager -->
+  <div id="tag-overlay" class="overlay hidden">
+    <div class="dialog-box wide">
+      <div class="detail-header">
+        <div class="dialog-title">Tags verwalten</div>
+        <button class="btn-icon-sm" id="tag-close">✕</button>
+      </div>
+      <div id="tag-list-modal" class="detail-content"></div>
+      <div class="card" style="margin-top:12px;background:var(--surface3)">
+        <div class="card-label">NEUER TAG</div>
+        <label class="field-label" for="new-tag-label">Bezeichnung</label>
+        <input type="text" id="new-tag-label" placeholder="z.B. Sichtprobleme" autocorrect="off">
+        <button class="btn btn-primary full-width" id="btn-add-tag" style="margin-top:10px">+ Hinzufügen</button>
       </div>
     </div>
   </div>

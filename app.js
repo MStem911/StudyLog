@@ -5,6 +5,16 @@ const KEY_PROBANDEN = 'sl_probanden';
 const KEY_SESSIONS  = 'sl_sessions';
 const KEY_SETTINGS  = 'sl_settings';
 const KEY_SCENARIOS = 'sl_scenarios';
+const KEY_TAGS      = 'sl_tags';
+
+const DEFAULT_TAGS = [
+  'Szenario verkürzt',
+  'Techn. Fehler',
+  'Proband abgebrochen',
+  'Setup-Abweichung',
+  'Proband unsicher',
+  'Szenario wiederholt',
+];
 
 const DEFAULT_SCENARIOS = [
   { id: 'sc_vr', name: 'Szenario VR Welt',       abbr: 'VR', icon: '🥽' },
@@ -17,6 +27,7 @@ let probanden        = [];
 let sessions         = [];
 let settings         = { deviceLabel: '', lastExport: null };
 let scenarios        = [];
+let tags             = [];
 let selectedScenId   = '';
 let timerInterval    = null;
 let timerStart       = null;
@@ -35,6 +46,7 @@ function save() {
     localStorage.setItem(KEY_SESSIONS,  JSON.stringify(sessions));
     localStorage.setItem(KEY_SETTINGS,  JSON.stringify(settings));
     localStorage.setItem(KEY_SCENARIOS, JSON.stringify(scenarios));
+    localStorage.setItem(KEY_TAGS,      JSON.stringify(tags));
   } catch(e) { showToast('⚠ Speicherfehler'); }
 }
 
@@ -44,13 +56,17 @@ function load() {
     const s  = localStorage.getItem(KEY_SESSIONS);
     const st = localStorage.getItem(KEY_SETTINGS);
     const sc = localStorage.getItem(KEY_SCENARIOS);
+    const tg = localStorage.getItem(KEY_TAGS);
     if (p)  probanden = JSON.parse(p);
     if (s)  sessions  = JSON.parse(s);
     if (st) settings  = { ...settings, ...JSON.parse(st) };
     scenarios = sc ? JSON.parse(sc) : deepCopy(DEFAULT_SCENARIOS);
     if (!scenarios.length) scenarios = deepCopy(DEFAULT_SCENARIOS);
+    tags = tg ? JSON.parse(tg) : [...DEFAULT_TAGS];
+    if (!tags.length) tags = [...DEFAULT_TAGS];
   } catch(e) {
     scenarios = deepCopy(DEFAULT_SCENARIOS);
+    tags = [...DEFAULT_TAGS];
   }
 }
 
@@ -348,6 +364,7 @@ document.getElementById('sel-proband').addEventListener('change', updateProbandB
 function renderSessionScreen() {
   buildProbandSelect();
   buildScenarioGrid();
+  renderTagRow('deviation-tags');
   updateTimerUI();
 }
 
@@ -413,9 +430,108 @@ function updateTimerUI() {
 document.getElementById('btn-start').addEventListener('click', startTimer);
 document.getElementById('btn-stop').addEventListener('click', stopTimer);
 
-document.querySelectorAll('#deviation-tags .tag').forEach(tag =>
-  tag.addEventListener('click', () => tag.classList.toggle('active'))
-);
+// ── Tag Rendering (dynamic) ──────────────────────────────────────────────────
+// Renders tags into any container; selected = array of currently active tag strings
+function renderTagRow(containerId, selectedTags = []) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = tags.map(tag => `
+    <button class="tag${selectedTags.includes(tag) ? ' active' : ''}" data-tag="${esc(tag)}">${esc(tag)}</button>
+  `).join('');
+  container.querySelectorAll('.tag').forEach(btn =>
+    btn.addEventListener('click', () => btn.classList.toggle('active'))
+  );
+}
+
+function getActiveTags(containerId) {
+  return Array.from(document.querySelectorAll(`#${containerId} .tag.active`)).map(t => t.dataset.tag);
+}
+
+// ── Tag Manager ───────────────────────────────────────────────────────────────
+document.getElementById('btn-manage-tags').addEventListener('click', () => {
+  renderTagManager();
+  document.getElementById('tag-overlay').classList.remove('hidden');
+});
+document.getElementById('tag-close').addEventListener('click', () => {
+  document.getElementById('tag-overlay').classList.add('hidden');
+  // Refresh both tag rows after possible changes
+  renderTagRow('deviation-tags');
+});
+document.getElementById('tag-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('tag-overlay')) {
+    document.getElementById('tag-overlay').classList.add('hidden');
+    renderTagRow('deviation-tags');
+  }
+});
+
+function renderTagManager() {
+  const list = document.getElementById('tag-list-modal');
+  if (!tags.length) {
+    list.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px">Keine Tags vorhanden</div>';
+    return;
+  }
+  list.innerHTML = tags.map((tag, i) => `
+    <div class="scenario-manager-item" data-idx="${i}">
+      <div class="sm-info">
+        <div class="sm-name" id="tag-name-${i}">${esc(tag)}</div>
+      </div>
+      <div class="sm-btns">
+        <button class="sm-btn" data-action="edit" data-idx="${i}">✏</button>
+        <button class="sm-btn del" data-action="del" data-idx="${i}">✕</button>
+      </div>
+    </div>
+    <div class="tag-edit-row hidden" id="tag-edit-row-${i}">
+      <input type="text" class="tag-edit-input" id="tag-edit-input-${i}" value="${esc(tag)}" autocorrect="off">
+      <div class="btn-row" style="margin-top:6px">
+        <button class="btn btn-primary flex-1" data-action="save" data-idx="${i}">✓ Speichern</button>
+        <button class="btn btn-ghost" data-action="cancel-edit" data-idx="${i}">Abbrechen</button>
+      </div>
+    </div>`).join('');
+
+  list.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx    = parseInt(btn.dataset.idx, 10);
+      const action = btn.dataset.action;
+
+      if (action === 'del') {
+        if (tags.length <= 1) { showToast('⚠ Mindestens 1 Tag erforderlich'); return; }
+        showConfirm('Tag löschen',
+          `"${tags[idx]}" löschen? In gespeicherten Sitzungen bleibt der Text erhalten.`,
+          () => { tags.splice(idx, 1); save(); renderTagManager(); }
+        );
+      } else if (action === 'edit') {
+        // Toggle inline edit row
+        const row = document.getElementById(`tag-edit-row-${idx}`);
+        row.classList.remove('hidden');
+        document.getElementById(`tag-edit-input-${idx}`).focus();
+      } else if (action === 'cancel-edit') {
+        document.getElementById(`tag-edit-row-${idx}`).classList.add('hidden');
+      } else if (action === 'save') {
+        const input = document.getElementById(`tag-edit-input-${idx}`);
+        const val   = input.value.trim();
+        if (!val) { showToast('⚠ Bezeichnung eingeben'); return; }
+        if (tags.some((t, i) => i !== idx && t.toLowerCase() === val.toLowerCase())) {
+          showToast('⚠ Tag bereits vorhanden'); return;
+        }
+        tags[idx] = val;
+        save();
+        renderTagManager();
+        showToast('✓ Tag aktualisiert');
+      }
+    });
+  });
+}
+
+document.getElementById('btn-add-tag').addEventListener('click', () => {
+  const val = document.getElementById('new-tag-label').value.trim();
+  if (!val) { showToast('⚠ Bezeichnung eingeben'); return; }
+  if (tags.some(t => t.toLowerCase() === val.toLowerCase())) { showToast('⚠ Tag bereits vorhanden'); return; }
+  tags.push(val);
+  save();
+  document.getElementById('new-tag-label').value = '';
+  renderTagManager();
+  showToast('✓ Tag hinzugefügt');
+});
 
 document.getElementById('btn-save-session').addEventListener('click', () => {
   const probandId = document.getElementById('sel-proband').value;
@@ -424,7 +540,7 @@ document.getElementById('btn-save-session').addEventListener('click', () => {
   if (!sessionEndISO)   { showToast('⚠ Nicht gestoppt'); return; }
   const p  = probanden.find(x => x.id === probandId);
   const sc = scenarios.find(x => x.id === selectedScenId);
-  const deviations = Array.from(document.querySelectorAll('#deviation-tags .tag.active')).map(t => t.dataset.tag);
+  const deviations = getActiveTags('deviation-tags');
   const notes = document.getElementById('session-notes').value.trim();
   sessions.push({
     id: uid(), probandId,
@@ -444,7 +560,7 @@ document.getElementById('btn-save-session').addEventListener('click', () => {
   save();
   sessionStartISO = null; sessionEndISO = null; timerElapsed = 0;
   document.getElementById('save-card').classList.add('hidden');
-  document.querySelectorAll('#deviation-tags .tag').forEach(t => t.classList.remove('active'));
+  renderTagRow('deviation-tags');  // reset tags
   document.getElementById('session-notes').value = '';
   updateTimerUI();
   showToast('✓ Sitzung gespeichert');
@@ -660,10 +776,8 @@ function openEditSession(id) {
   // Notes
   document.getElementById('edit-notes').value = s.notes || '';
 
-  // Tags
-  document.querySelectorAll('#edit-deviation-tags .tag').forEach(tag =>
-    tag.classList.toggle('active', (s.deviations || []).includes(tag.dataset.tag))
-  );
+  // Tags — render dynamically with currently saved active state
+  renderTagRow('edit-deviation-tags', s.deviations || []);
 
   // Switch overlays
   document.getElementById('detail-overlay').classList.add('hidden');
@@ -679,10 +793,6 @@ function closeEditOverlay() {
   document.getElementById('edit-overlay').classList.add('hidden');
 }
 
-document.querySelectorAll('#edit-deviation-tags .tag').forEach(tag =>
-  tag.addEventListener('click', () => tag.classList.toggle('active'))
-);
-
 document.getElementById('btn-save-edit').addEventListener('click', () => {
   // Guard: must have a session selected
   if (!detailSessionId) { showToast('⚠ Keine Sitzung ausgewählt'); return; }
@@ -695,7 +805,7 @@ document.getElementById('btn-save-edit').addEventListener('click', () => {
   const startTime  = document.getElementById('edit-start-time').value;
   const endTime    = document.getElementById('edit-end-time').value;
   const notes      = document.getElementById('edit-notes').value.trim();
-  const deviations = Array.from(document.querySelectorAll('#edit-deviation-tags .tag.active')).map(t => t.dataset.tag);
+  const deviations = getActiveTags('edit-deviation-tags');
 
   // Validate times
   if (!startTime) { showToast('⚠ Startzeit eingeben'); return; }
@@ -827,5 +937,6 @@ if (scenarios.length) selectedScenId = scenarios[0].id;
 renderProbanden();
 buildScenarioGrid();
 buildProbandSelect();
+renderTagRow('deviation-tags');
 document.getElementById('topbar-sub').textContent =
   new Date().toLocaleDateString('de-DE', { weekday:'short', year:'numeric', month:'short', day:'numeric' });
