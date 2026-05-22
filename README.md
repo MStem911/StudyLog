@@ -1,6 +1,6 @@
 # StudyLog
 
-Offline-fähige PWA zur Protokollierung von Studiendurchführungen.  
+Offline-fähige PWA (Progressive Web App / Website die sich wie eine native App verhält) zur Protokollierung von Studiendurchführungen.  
 Entwickelt für die Universität der Bundeswehr München.
 
 ## Funktionen
