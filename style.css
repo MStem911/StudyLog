@@ -410,6 +410,9 @@ input[type="datetime-local"] { color-scheme: dark; }
 }
 .overlay.hidden { display: none; }
 
+/* Confirm dialog always on top of other overlays */
+#confirm-overlay { z-index: 300; }
+
 .dialog-box {
   background: var(--surface2);
   border: 1px solid var(--border2);

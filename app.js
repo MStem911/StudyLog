@@ -296,13 +296,15 @@ document.getElementById('btn-save-proband-edit').addEventListener('click', () =>
 
 document.getElementById('btn-delete-proband').addEventListener('click', () => {
   if (!editingProbandId) return;
-  const p = probanden.find(x => x.id === editingProbandId);
-  const count = sessions.filter(s => s.probandId === editingProbandId).length;
+  // Capture ID NOW — closeProbandEdit() sets editingProbandId to null
+  const idToDelete = editingProbandId;
+  const p     = probanden.find(x => x.id === idToDelete);
+  const count = sessions.filter(s => s.probandId === idToDelete).length;
   const warn  = count > 0 ? ` Zugehörige ${count} Sitzung(en) bleiben erhalten.` : '';
   showConfirm('Person löschen',
     `"${p ? p.pseudo : ''}" wirklich löschen?${warn}`,
     () => {
-      probanden = probanden.filter(x => x.id !== editingProbandId);
+      probanden = probanden.filter(x => x.id !== idToDelete);
       save();
       closeProbandEdit();
       renderProbanden(document.getElementById('search-input').value);
@@ -725,13 +727,13 @@ function closeDetailOverlay() {
 // ── Session Delete (from detail) ─────────────────────────────────────────────
 document.getElementById('btn-delete-session').addEventListener('click', () => {
   if (!detailSessionId) return;
-  const s = sessions.find(x => x.id === detailSessionId);
+  const idToDelete = detailSessionId;
+  const s = sessions.find(x => x.id === idToDelete);
   showConfirm('Sitzung löschen',
     `Sitzung von ${s ? s.pseudo : ''} löschen? Kann nicht rückgängig gemacht werden.`,
     () => {
-      sessions = sessions.filter(x => x.id !== detailSessionId);
+      sessions = sessions.filter(x => x.id !== idToDelete);
       save();
-      // Close BOTH detail and edit overlays
       document.getElementById('detail-overlay').classList.add('hidden');
       document.getElementById('edit-overlay').classList.add('hidden');
       detailSessionId = null;

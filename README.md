@@ -1,6 +1,6 @@
 # StudyLog
 
-Offline-fähige PWA (Progressive Web App / Website die sich wie eine native App verhält) zur Protokollierung von Studiendurchführungen.  
+Offline-fähige PWA zur Protokollierung von Studiendurchführungen.  
 Entwickelt für die Universität der Bundeswehr München.
 
 ## Funktionen
@@ -19,6 +19,13 @@ Entwickelt für die Universität der Bundeswehr München.
 - Alle Daten verbleiben lokal auf dem Gerät
 - Export enthält nur: Pseudonym, Sensoriknummer, Station, Zeitstempel, Szenario, Abweichungen, Notizen
 - Zuordnungsliste Pseudonym ↔ Klarname liegt separat bei der Studienleitung
+
+## GitHub Pages Deployment
+
+1. Repository auf GitHub anlegen (privat)
+2. Alle Dateien pushen
+3. Unter `Settings → Pages → Source` den Branch `main` und Ordner `/ (root)` wählen
+4. Nach ~1 Minute ist die App unter `https://<username>.github.io/<reponame>/` erreichbar
 
 ### Auf iPhone installieren
 
