@@ -15,7 +15,6 @@
 <body>
 <div id="app">
 
-  <!-- Top Bar -->
   <header class="topbar">
     <div class="topbar-left">
       <div class="logo">SL</div>
@@ -24,19 +23,16 @@
         <span class="topbar-sub" id="topbar-sub">UniBw München</span>
       </div>
     </div>
-    <div class="topbar-right">
-      <span class="lock-icon">🔒</span>
-    </div>
+    <div class="topbar-right"><span class="lock-icon">🔒</span></div>
   </header>
 
-  <!-- Screens -->
   <main class="screen-container">
 
-    <!-- ── Probanden ─────────────────────────────────────── -->
+    <!-- ── Teilnehmende ── -->
     <section class="screen active" id="screen-probanden">
       <div class="screen-inner">
         <div class="search-row">
-          <input type="text" id="search-input" placeholder="🔍  Proband suchen…" autocomplete="off" autocorrect="off" autocapitalize="none">
+          <input type="text" id="search-input" placeholder="🔍  Suchen…" autocomplete="off" autocorrect="off" autocapitalize="none">
           <button class="btn-icon btn-primary" id="btn-add-proband" aria-label="Neu">+</button>
         </div>
         <div class="card form-card hidden" id="add-form">
@@ -52,28 +48,26 @@
             <button class="btn btn-ghost" id="btn-cancel-proband">Abbrechen</button>
           </div>
         </div>
-        <div class="section-label" id="proband-count-label">ANGELEGTE PROBANDEN</div>
+        <div class="section-label" id="proband-count-label">TEILNEHMENDE</div>
         <div id="proband-list" class="item-list"></div>
         <div id="proband-empty" class="empty-state hidden">
           <div class="empty-icon">👥</div>
-          <div class="empty-text">Noch keine Probanden angelegt</div>
+          <div class="empty-text">Noch keine Teilnehmenden angelegt</div>
           <div class="empty-sub">Tippe auf + um eine Person hinzuzufügen</div>
         </div>
       </div>
     </section>
 
-    <!-- ── Sitzung ────────────────────────────────────────── -->
+    <!-- ── Sitzung ── -->
     <section class="screen" id="screen-session">
       <div class="screen-inner">
-
         <div class="card">
-          <div class="card-label">PROBAND WÄHLEN</div>
+          <div class="card-label">TEILNEHMENDE WÄHLEN</div>
           <select id="sel-proband" class="field-select">
-            <option value="">— Proband wählen —</option>
+            <option value="">— Teilnehmende wählen —</option>
           </select>
           <div class="confirm-badge hidden" id="proband-badge"></div>
         </div>
-
         <div class="card">
           <div class="card-label-row">
             <span class="card-label" style="margin-bottom:0">SZENARIO</span>
@@ -81,10 +75,8 @@
           </div>
           <div class="scenario-grid" id="scenario-grid"></div>
         </div>
-
-        <!-- Notes BEFORE/DURING -->
         <div class="card">
-          <div class="card-label">ANMERKUNGEN (jederzeit)</div>
+          <div class="card-label">ABWEICHUNGEN &amp; ANMERKUNGEN</div>
           <div class="tag-row" id="deviation-tags">
             <button class="tag" data-tag="Szenario verkürzt">Szenario verkürzt</button>
             <button class="tag" data-tag="Techn. Fehler">Techn. Fehler</button>
@@ -93,10 +85,8 @@
             <button class="tag" data-tag="Proband unsicher">Unsicher</button>
             <button class="tag" data-tag="Szenario wiederholt">Wiederholt</button>
           </div>
-          <textarea id="session-notes" rows="3" placeholder="Notizen während des Szenarios…" style="margin-top:10px"></textarea>
+          <textarea id="session-notes" rows="3" placeholder="Notizen…" style="margin-top:10px"></textarea>
         </div>
-
-        <!-- Timer -->
         <div class="card timer-card">
           <div class="timer-status" id="timer-status"><span class="status-idle">Bereit</span></div>
           <div class="timer-display" id="timer-display">00:00</div>
@@ -106,24 +96,18 @@
             <button class="btn btn-stop full-width hidden" id="btn-stop">⏹ Stopp</button>
           </div>
         </div>
-
         <div class="card hidden" id="save-card">
           <button class="btn btn-save full-width" id="btn-save-session">💾 Sitzung speichern</button>
         </div>
-
       </div>
     </section>
 
-    <!-- ── Protokoll ──────────────────────────────────────── -->
+    <!-- ── Protokoll ── -->
     <section class="screen" id="screen-log">
       <div class="screen-inner">
         <div class="filter-row">
-          <select id="log-filter-station" class="field-select small-select">
-            <option value="all">Alle Szenarien</option>
-          </select>
-          <select id="log-filter-proband" class="field-select small-select">
-            <option value="all">Alle Probanden</option>
-          </select>
+          <select id="log-filter-station" class="field-select small-select"><option value="all">Alle Szenarien</option></select>
+          <select id="log-filter-proband" class="field-select small-select"><option value="all">Alle Teilnehmenden</option></select>
         </div>
         <div class="section-label" id="log-count-label">SITZUNGEN</div>
         <div id="log-list" class="item-list"></div>
@@ -134,20 +118,18 @@
       </div>
     </section>
 
-    <!-- ── Export ─────────────────────────────────────────── -->
+    <!-- ── Export ── -->
     <section class="screen" id="screen-export">
       <div class="screen-inner">
         <div class="card privacy-card">
           <div class="card-label purple-label">🔒 DATENSCHUTZHINWEIS</div>
-          <p class="privacy-text">Daten werden <strong>ausschließlich lokal</strong> auf diesem Gerät gespeichert. Export enthält nur Pseudonyme &amp; Sensoriknummern — keinen Klarnamen.</p>
+          <p class="privacy-text">Daten werden <strong>ausschließlich lokal</strong> auf diesem Gerät gespeichert. Export enthält nur Pseudonyme &amp; Sensoriknummern.</p>
         </div>
         <div class="card">
-          <div class="card-label">GERÄT / BETREUER</div>
-          <input type="text" id="inp-device-label" placeholder="z.B. Station VR – Max M." autocorrect="off">
+          <div class="card-label">GERÄT / BETREUUNG</div>
+          <input type="text" id="inp-device-label" placeholder="z.B. VR-Station – Max M." autocorrect="off">
           <div class="card-label" style="margin-top:12px">SZENARIO FILTERN</div>
-          <select id="export-filter-station" class="field-select">
-            <option value="all">Alle Szenarien</option>
-          </select>
+          <select id="export-filter-station" class="field-select"><option value="all">Alle Szenarien</option></select>
         </div>
         <div class="stats-grid" id="stats-grid"></div>
         <div class="btn-col">
@@ -166,26 +148,16 @@
 
   </main>
 
-  <!-- Bottom Nav -->
   <nav class="bottom-nav">
-    <button class="nav-btn active" data-screen="probanden">
-      <span class="nav-icon">👤</span><span class="nav-label">Probanden</span>
-    </button>
-    <button class="nav-btn" data-screen="session">
-      <span class="nav-icon">⏺</span><span class="nav-label">Sitzung</span>
-    </button>
-    <button class="nav-btn" data-screen="log">
-      <span class="nav-icon">☰</span><span class="nav-label">Protokoll</span>
-    </button>
-    <button class="nav-btn" data-screen="export">
-      <span class="nav-icon">↓</span><span class="nav-label">Export</span>
-    </button>
+    <button class="nav-btn active" data-screen="probanden"><span class="nav-icon">👤</span><span class="nav-label">Teilnehmende</span></button>
+    <button class="nav-btn" data-screen="session"><span class="nav-icon">⏺</span><span class="nav-label">Sitzung</span></button>
+    <button class="nav-btn" data-screen="log"><span class="nav-icon">☰</span><span class="nav-label">Protokoll</span></button>
+    <button class="nav-btn" data-screen="export"><span class="nav-icon">↓</span><span class="nav-label">Export</span></button>
   </nav>
 
-  <!-- Toast -->
   <div id="toast" class="toast hidden"></div>
 
-  <!-- Confirm Dialog -->
+  <!-- Confirm -->
   <div id="confirm-overlay" class="overlay hidden">
     <div class="dialog-box">
       <div class="dialog-title" id="confirm-title">Bestätigung</div>
@@ -197,7 +169,7 @@
     </div>
   </div>
 
-  <!-- Session Detail / Edit Modal -->
+  <!-- Session Detail -->
   <div id="detail-overlay" class="overlay hidden">
     <div class="dialog-box wide">
       <div class="detail-header">
@@ -212,7 +184,7 @@
     </div>
   </div>
 
-  <!-- Session Edit Modal -->
+  <!-- Session Edit -->
   <div id="edit-overlay" class="overlay hidden">
     <div class="dialog-box wide">
       <div class="detail-header">
@@ -220,14 +192,21 @@
         <button class="btn-icon-sm" id="edit-close">✕</button>
       </div>
       <div class="edit-content">
-        <label class="field-label">Proband</label>
+        <label class="field-label">Teilnehmende</label>
         <select id="edit-proband" class="field-select"></select>
         <label class="field-label">Szenario</label>
         <select id="edit-scenario" class="field-select"></select>
-        <label class="field-label">Start (Datum &amp; Uhrzeit)</label>
-        <input type="datetime-local" id="edit-start" class="field-input">
-        <label class="field-label">Ende (Datum &amp; Uhrzeit)</label>
-        <input type="datetime-local" id="edit-end" class="field-input">
+        <div class="date-info-row" id="edit-date-info"></div>
+        <div class="time-row">
+          <div class="time-col">
+            <label class="field-label">Startzeit</label>
+            <input type="time" id="edit-start-time" step="1">
+          </div>
+          <div class="time-col">
+            <label class="field-label">Endzeit</label>
+            <input type="time" id="edit-end-time" step="1">
+          </div>
+        </div>
         <label class="field-label">Abweichungen</label>
         <div class="tag-row" id="edit-deviation-tags">
           <button class="tag" data-tag="Szenario verkürzt">Szenario verkürzt</button>
@@ -238,16 +217,39 @@
           <button class="tag" data-tag="Szenario wiederholt">Wiederholt</button>
         </div>
         <label class="field-label">Anmerkungen</label>
-        <textarea id="edit-notes" rows="4"></textarea>
+        <textarea id="edit-notes" rows="3"></textarea>
       </div>
       <div class="btn-col" style="margin-top:14px">
-        <button class="btn btn-primary full-width" id="btn-save-edit">💾 Änderungen speichern</button>
+        <button class="btn btn-primary full-width" id="btn-save-edit">💾 Speichern</button>
         <button class="btn btn-ghost full-width" id="edit-cancel">Abbrechen</button>
       </div>
     </div>
   </div>
 
-  <!-- Scenario Manager Modal -->
+  <!-- Teilnehmende Edit -->
+  <div id="proband-edit-overlay" class="overlay hidden">
+    <div class="dialog-box wide">
+      <div class="detail-header">
+        <div class="dialog-title">Person bearbeiten</div>
+        <button class="btn-icon-sm" id="proband-edit-close">✕</button>
+      </div>
+      <div class="edit-content">
+        <label class="field-label" for="edit-pseudo">Pseudonym</label>
+        <input type="text" id="edit-pseudo" autocomplete="off" autocorrect="off" autocapitalize="characters">
+        <label class="field-label" for="edit-sensor">Sensoriknummer (1–12)</label>
+        <input type="number" id="edit-sensor" min="1" max="12" inputmode="numeric">
+        <label class="field-label" for="edit-note">Notiz (optional)</label>
+        <input type="text" id="edit-note" autocorrect="off">
+      </div>
+      <div class="btn-col" style="margin-top:14px">
+        <button class="btn btn-primary full-width" id="btn-save-proband-edit">💾 Speichern</button>
+        <button class="btn btn-danger full-width" id="btn-delete-proband">Person löschen</button>
+        <button class="btn btn-ghost full-width" id="proband-edit-cancel">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scenario Manager -->
   <div id="scenario-overlay" class="overlay hidden">
     <div class="dialog-box wide">
       <div class="detail-header">
@@ -263,7 +265,7 @@
         <input type="text" id="new-scenario-abbr" placeholder="z.B. FE" maxlength="4" autocorrect="off" autocapitalize="characters">
         <label class="field-label" for="new-scenario-icon">Icon (Emoji)</label>
         <input type="text" id="new-scenario-icon" placeholder="z.B. 🔥" maxlength="2">
-        <button class="btn btn-primary full-width" id="btn-add-scenario" style="margin-top:10px">+ Szenario hinzufügen</button>
+        <button class="btn btn-primary full-width" id="btn-add-scenario" style="margin-top:10px">+ Hinzufügen</button>
       </div>
     </div>
   </div>
@@ -272,9 +274,7 @@
 <script src="app.js"></script>
 <script>
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
-    });
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   }
 </script>
 </body>

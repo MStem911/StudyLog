@@ -434,3 +434,25 @@ input[type="datetime-local"] { color-scheme: dark; }
 
 /* ── Utilities ────────────────────────────────────────────────────────── */
 .hidden { display: none !important; }
+
+/* ── Date info row in edit modal ──────────────────────────────────────── */
+.date-info-row {
+  font-size: 12px;
+  color: var(--text3);
+  background: var(--surface3);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin: 4px 0 6px;
+}
+
+/* ── Time row in edit modal ───────────────────────────────────────────── */
+.time-row { display: flex; gap: 10px; margin-top: 2px; }
+.time-col { flex: 1; display: flex; flex-direction: column; }
+
+.date-info-row {
+  font-size: 12px; color: var(--purple-lt);
+  background: var(--purple-bg); border-radius: var(--radius-sm);
+  padding: 8px 12px; margin: 6px 0 2px;
+}
+
+input[type="time"] { color-scheme: dark; }

@@ -1,37 +1,34 @@
 'use strict';
 
-// ── Storage Keys ───────────────────────────────────────────────────────────
+// ── Storage Keys ────────────────────────────────────────────────────────────
 const KEY_PROBANDEN = 'sl_probanden';
 const KEY_SESSIONS  = 'sl_sessions';
 const KEY_SETTINGS  = 'sl_settings';
 const KEY_SCENARIOS = 'sl_scenarios';
 
-// ── Default Scenarios ──────────────────────────────────────────────────────
 const DEFAULT_SCENARIOS = [
   { id: 'sc_vr', name: 'Szenario VR Welt',       abbr: 'VR', icon: '🥽' },
   { id: 'sc_vu', name: 'Szenario Verkehrsunfall', abbr: 'VU', icon: '🚗' },
   { id: 'sc_kh', name: 'Szenario Krankenhaus',    abbr: 'KH', icon: '🏥' },
 ];
 
-// ── State ──────────────────────────────────────────────────────────────────
-let probanden       = [];
-let sessions        = [];
-let settings        = { deviceLabel: '', lastExport: null };
-let scenarios       = [];
+// ── App State ───────────────────────────────────────────────────────────────
+let probanden        = [];
+let sessions         = [];
+let settings         = { deviceLabel: '', lastExport: null };
+let scenarios        = [];
+let selectedScenId   = '';
+let timerInterval    = null;
+let timerStart       = null;
+let timerElapsed     = 0;
+let sessionStartISO  = null;
+let sessionEndISO    = null;
+let sessionRunning   = false;
+let detailSessionId  = null;
+let editingProbandId = null;
+let confirmCallback  = null;
 
-let currentScreen   = 'probanden';
-let selectedScenId  = '';
-let timerInterval   = null;
-let timerStart      = null;
-let timerElapsed    = 0;
-let sessionStartISO = null;
-let sessionEndISO   = null;
-let sessionRunning  = false;
-
-let detailSessionId = null;
-let confirmCallback = null;
-
-// ── Persistence ────────────────────────────────────────────────────────────
+// ── Persistence ─────────────────────────────────────────────────────────────
 function save() {
   try {
     localStorage.setItem(KEY_PROBANDEN, JSON.stringify(probanden));
@@ -50,61 +47,67 @@ function load() {
     if (p)  probanden = JSON.parse(p);
     if (s)  sessions  = JSON.parse(s);
     if (st) settings  = { ...settings, ...JSON.parse(st) };
-    // Scenarios: use saved or defaults
-    scenarios = sc ? JSON.parse(sc) : JSON.parse(JSON.stringify(DEFAULT_SCENARIOS));
-    if (!scenarios.length) scenarios = JSON.parse(JSON.stringify(DEFAULT_SCENARIOS));
+    scenarios = sc ? JSON.parse(sc) : deepCopy(DEFAULT_SCENARIOS);
+    if (!scenarios.length) scenarios = deepCopy(DEFAULT_SCENARIOS);
   } catch(e) {
-    console.error('Load error', e);
-    scenarios = JSON.parse(JSON.stringify(DEFAULT_SCENARIOS));
+    scenarios = deepCopy(DEFAULT_SCENARIOS);
   }
 }
 
-// ── Utilities ──────────────────────────────────────────────────────────────
+// ── Utilities ────────────────────────────────────────────────────────────────
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
+function deepCopy(x) { return JSON.parse(JSON.stringify(x)); }
 
 function formatTime(sec) {
-  const s = Math.max(0, Math.floor(sec));
-  return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  const s = Math.max(0, Math.floor(Number(sec) || 0));
+  return String(Math.floor(s / 60)).padStart(2,'0') + ':' + String(s % 60).padStart(2,'0');
 }
 
-// ── TIMEZONE FIX ──────────────────────────────────────────────────────────
-// Always use local time for display. Never use UTC methods for time-of-day.
+// ── TIMEZONE-SAFE time display ───────────────────────────────────────────────
+// Always use the device's local timezone via toLocale* methods.
 function localTimeStr(iso) {
   if (!iso) return '—';
-  const d = new Date(iso);
-  // toLocaleTimeString uses the device's local timezone automatically
-  return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(iso).toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
 }
-
 function localDateStr(iso) {
   if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', year:'numeric' });
 }
-
 function localDatetimeStr(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   return d.toLocaleDateString('de-DE') + '  ' +
-         d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+         d.toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
 }
 
-// Convert ISO to value for datetime-local input (local time, not UTC)
-function isoToLocalInput(iso) {
+// Extract HH:MM:SS from an ISO string in LOCAL time (for <input type="time">)
+function isoToTimeInput(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  // Shift by timezone offset to get local time in the input field
-  const tzOffset = d.getTimezoneOffset() * 60000;
-  const local = new Date(d.getTime() - tzOffset);
-  return local.toISOString().slice(0, 16);
+  // Use local hours/minutes/seconds — NOT UTC
+  const hh = String(d.getHours()).padStart(2,'0');
+  const mm  = String(d.getMinutes()).padStart(2,'0');
+  const ss  = String(d.getSeconds()).padStart(2,'0');
+  return `${hh}:${mm}:${ss}`;
 }
 
-// Convert datetime-local input value back to ISO string (local time → ISO)
-function localInputToIso(val) {
-  if (!val) return '';
-  // datetime-local gives us local time string — Date() parses it as local
-  return new Date(val).toISOString();
+// Rebuild ISO keeping the ORIGINAL LOCAL DATE, only replacing the time.
+// This prevents date from silently shifting across midnight due to UTC offset.
+function rebuildISO(originalISO, timeStr) {
+  if (!originalISO || !timeStr) return originalISO || null;
+  const orig = new Date(originalISO);
+  // Get local date components from original
+  const year  = orig.getFullYear();
+  const month = orig.getMonth();
+  const day   = orig.getDate();
+  const parts = timeStr.split(':');
+  const h = parseInt(parts[0], 10) || 0;
+  const m = parseInt(parts[1], 10) || 0;
+  const s = parseInt(parts[2], 10) || 0;
+  // Create new Date from local components — JS treats this as local time
+  return new Date(year, month, day, h, m, s, 0).toISOString();
 }
 
 function esc(str) {
@@ -121,7 +124,12 @@ function showToast(msg, dur = 2800) {
   showToast._t = setTimeout(() => el.classList.add('hidden'), dur);
 }
 
-// ── Confirm Dialog ─────────────────────────────────────────────────────────
+function closeAllOverlays() {
+  ['confirm-overlay','detail-overlay','edit-overlay','proband-edit-overlay','scenario-overlay']
+    .forEach(id => document.getElementById(id)?.classList.add('hidden'));
+}
+
+// ── Confirm Dialog ───────────────────────────────────────────────────────────
 function showConfirm(title, msg, onOk) {
   document.getElementById('confirm-title').textContent = title;
   document.getElementById('confirm-msg').textContent   = msg;
@@ -138,36 +146,33 @@ document.getElementById('confirm-cancel').addEventListener('click', () => {
   confirmCallback = null;
 });
 
-// ── Navigation ─────────────────────────────────────────────────────────────
+// ── Navigation ───────────────────────────────────────────────────────────────
 function showScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const screen = document.getElementById('screen-' + name);
-  if (screen) screen.classList.add('active');
-  const btn = document.querySelector(`.nav-btn[data-screen="${name}"]`);
-  if (btn) btn.classList.add('active');
-  currentScreen = name;
+  document.getElementById('screen-' + name)?.classList.add('active');
+  document.querySelector(`.nav-btn[data-screen="${name}"]`)?.classList.add('active');
   if (name === 'session')   renderSessionScreen();
   if (name === 'log')       renderLog();
   if (name === 'export')    renderExport();
   if (name === 'probanden') renderProbanden();
 }
+document.querySelectorAll('.nav-btn').forEach(btn =>
+  btn.addEventListener('click', () => showScreen(btn.dataset.screen))
+);
 
-document.querySelectorAll('.nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => showScreen(btn.dataset.screen));
-});
-
-// ── PROBANDEN SCREEN ───────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// TEILNEHMENDE SCREEN
+// ══════════════════════════════════════════════════════════════════════════════
 function renderProbanden(filter = '') {
   const list  = document.getElementById('proband-list');
   const empty = document.getElementById('proband-empty');
   const label = document.getElementById('proband-count-label');
   const lower = filter.toLowerCase();
   const filtered = probanden.filter(p =>
-    p.pseudo.toLowerCase().includes(lower) ||
-    String(p.sensor).includes(lower)
+    p.pseudo.toLowerCase().includes(lower) || String(p.sensor).includes(lower)
   );
-  label.textContent = `ANGELEGTE PROBANDEN (${filtered.length})`;
+  label.textContent = `TEILNEHMENDE (${filtered.length})`;
   if (!filtered.length) {
     list.innerHTML = '';
     empty.classList.remove('hidden');
@@ -175,12 +180,12 @@ function renderProbanden(filter = '') {
   }
   empty.classList.add('hidden');
   list.innerHTML = filtered.map(p => {
-    const done  = sessions.filter(s => s.probandId === p.id).length;
-    const total = scenarios.length || 3;
+    const done   = sessions.filter(s => s.probandId === p.id).length;
+    const total  = scenarios.length || 3;
     const status = done === 0 ? 'open' : done >= total ? 'done' : 'partial';
-    const badgeClass = { open:'badge-open', done:'badge-done', partial:'badge-partial' }[status];
-    const badgeLabel = { open:'Offen', done:'Fertig', partial:'Laufend' }[status];
-    const initials = p.pseudo.length >= 2 ? p.pseudo.slice(-2).toUpperCase() : p.pseudo.toUpperCase();
+    const bc = { open:'badge-open', done:'badge-done', partial:'badge-partial' }[status];
+    const bl = { open:'Offen',      done:'Fertig',     partial:'Laufend'        }[status];
+    const initials = p.pseudo.slice(-2).toUpperCase();
     return `<div class="proband-item" data-id="${esc(p.id)}">
       <div class="avatar">${esc(initials)}</div>
       <div class="proband-info">
@@ -188,36 +193,34 @@ function renderProbanden(filter = '') {
         <div class="proband-sub">SNR: ${esc(p.sensor)}${p.note ? '  ·  ' + esc(p.note) : ''}</div>
         <div class="proband-prog">${done} / ${total} Szenarien</div>
       </div>
-      <span class="badge ${badgeClass}">${badgeLabel}</span>
+      <span class="badge ${bc}">${bl}</span>
     </div>`;
   }).join('');
-  list.querySelectorAll('.proband-item').forEach(el => {
-    el.addEventListener('click', () => {
-      showScreen('session');
-      document.getElementById('sel-proband').value = el.dataset.id;
-      updateProbandBadge();
-    });
-  });
+  list.querySelectorAll('.proband-item').forEach(el =>
+    el.addEventListener('click', () => openProbandEdit(el.dataset.id))
+  );
 }
 
 document.getElementById('search-input').addEventListener('input', e => renderProbanden(e.target.value));
 
-document.getElementById('btn-add-proband').addEventListener('click', () => {
-  const form = document.getElementById('add-form');
-  form.classList.toggle('hidden');
-});
+// Add form
+document.getElementById('btn-add-proband').addEventListener('click', () =>
+  document.getElementById('add-form').classList.toggle('hidden')
+);
 document.getElementById('btn-cancel-proband').addEventListener('click', () => {
   document.getElementById('add-form').classList.add('hidden');
   clearAddForm();
 });
-document.getElementById('btn-save-proband').addEventListener('click', () => {
-  const pseudo    = document.getElementById('inp-pseudo').value.trim();
-  const sensorRaw = document.getElementById('inp-sensor').value.trim();
-  const note      = document.getElementById('inp-note').value.trim();
-  if (!pseudo)    { showToast('⚠ Pseudonym eingeben'); return; }
-  if (!sensorRaw) { showToast('⚠ Sensoriknummer eingeben'); return; }
-  const sensor = parseInt(sensorRaw, 10);
-  if (isNaN(sensor) || sensor < 1 || sensor > 12) { showToast('⚠ Sensoriknummer 1–12'); return; }
+document.getElementById('btn-save-proband').addEventListener('click', saveNewProband);
+
+function saveNewProband() {
+  const pseudo = document.getElementById('inp-pseudo').value.trim();
+  const sRaw   = document.getElementById('inp-sensor').value.trim();
+  const note   = document.getElementById('inp-note').value.trim();
+  if (!pseudo) { showToast('⚠ Pseudonym eingeben'); return; }
+  if (!sRaw)   { showToast('⚠ Sensoriknummer eingeben'); return; }
+  const sensor = parseInt(sRaw, 10);
+  if (isNaN(sensor) || sensor < 1 || sensor > 12) { showToast('⚠ Sensoriknummer muss 1–12 sein'); return; }
   if (probanden.some(p => String(p.sensor) === String(sensor))) { showToast('⚠ SNR ' + sensor + ' bereits vergeben'); return; }
   if (probanden.some(p => p.pseudo.toLowerCase() === pseudo.toLowerCase())) { showToast('⚠ Pseudonym bereits vergeben'); return; }
   probanden.push({ id: uid(), pseudo, sensor, note, createdAt: new Date().toISOString() });
@@ -226,19 +229,82 @@ document.getElementById('btn-save-proband').addEventListener('click', () => {
   document.getElementById('add-form').classList.add('hidden');
   renderProbanden(document.getElementById('search-input').value);
   showToast('✓ ' + pseudo + ' angelegt');
-});
+}
 function clearAddForm() {
   ['inp-pseudo','inp-sensor','inp-note'].forEach(id => { document.getElementById(id).value = ''; });
 }
 
-// ── SESSION SCREEN ─────────────────────────────────────────────────────────
+// ── Teilnehmende Edit / Delete ───────────────────────────────────────────────
+function openProbandEdit(id) {
+  const p = probanden.find(x => x.id === id);
+  if (!p) return;
+  editingProbandId = id;
+  document.getElementById('edit-pseudo').value = p.pseudo;
+  document.getElementById('edit-sensor').value = p.sensor;
+  document.getElementById('edit-note').value   = p.note || '';
+  document.getElementById('proband-edit-overlay').classList.remove('hidden');
+}
+
+document.getElementById('proband-edit-close').addEventListener('click', closeProbandEdit);
+document.getElementById('proband-edit-cancel').addEventListener('click', closeProbandEdit);
+document.getElementById('proband-edit-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('proband-edit-overlay')) closeProbandEdit();
+});
+function closeProbandEdit() {
+  document.getElementById('proband-edit-overlay').classList.add('hidden');
+  editingProbandId = null;
+}
+
+document.getElementById('btn-save-proband-edit').addEventListener('click', () => {
+  if (!editingProbandId) return;
+  const idx = probanden.findIndex(x => x.id === editingProbandId);
+  if (idx === -1) return;
+  const pseudo = document.getElementById('edit-pseudo').value.trim();
+  const sRaw   = document.getElementById('edit-sensor').value.trim();
+  const note   = document.getElementById('edit-note').value.trim();
+  if (!pseudo) { showToast('⚠ Pseudonym eingeben'); return; }
+  if (!sRaw)   { showToast('⚠ Sensoriknummer eingeben'); return; }
+  const sensor = parseInt(sRaw, 10);
+  if (isNaN(sensor) || sensor < 1 || sensor > 12) { showToast('⚠ Sensoriknummer 1–12'); return; }
+  if (probanden.some((p,i) => i !== idx && String(p.sensor) === String(sensor))) { showToast('⚠ SNR ' + sensor + ' bereits vergeben'); return; }
+  if (probanden.some((p,i) => i !== idx && p.pseudo.toLowerCase() === pseudo.toLowerCase())) { showToast('⚠ Pseudonym bereits vergeben'); return; }
+  probanden[idx] = { ...probanden[idx], pseudo, sensor, note };
+  // Propagate name/sensor changes into existing sessions
+  sessions = sessions.map(s => s.probandId === editingProbandId ? { ...s, pseudo, sensor } : s);
+  save();
+  closeProbandEdit();
+  renderProbanden(document.getElementById('search-input').value);
+  buildProbandSelect();
+  showToast('✓ Gespeichert');
+});
+
+document.getElementById('btn-delete-proband').addEventListener('click', () => {
+  if (!editingProbandId) return;
+  const p = probanden.find(x => x.id === editingProbandId);
+  const count = sessions.filter(s => s.probandId === editingProbandId).length;
+  const warn  = count > 0 ? ` Zugehörige ${count} Sitzung(en) bleiben erhalten.` : '';
+  showConfirm('Person löschen',
+    `"${p ? p.pseudo : ''}" wirklich löschen?${warn}`,
+    () => {
+      probanden = probanden.filter(x => x.id !== editingProbandId);
+      save();
+      closeProbandEdit();
+      renderProbanden(document.getElementById('search-input').value);
+      buildProbandSelect();
+      showToast('Person gelöscht');
+    }
+  );
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SESSION SCREEN
+// ══════════════════════════════════════════════════════════════════════════════
 function buildScenarioGrid() {
   const grid = document.getElementById('scenario-grid');
   if (!scenarios.length) {
-    grid.innerHTML = '<div style="color:var(--text3);font-size:12px">Keine Szenarien — bitte unter ⚙ Verwalten hinzufügen</div>';
+    grid.innerHTML = '<div style="color:var(--text3);font-size:12px">Keine Szenarien — unter ⚙ Verwalten hinzufügen</div>';
     return;
   }
-  // Default to first scenario if none selected or selected no longer exists
   if (!selectedScenId || !scenarios.find(s => s.id === selectedScenId)) {
     selectedScenId = scenarios[0].id;
   }
@@ -248,26 +314,26 @@ function buildScenarioGrid() {
       <span>${esc(sc.name)}</span>
       <span class="sc-abbr">${esc(sc.abbr)}</span>
     </button>`).join('');
-  grid.querySelectorAll('.scenario-btn').forEach(btn => {
+  grid.querySelectorAll('.scenario-btn').forEach(btn =>
     btn.addEventListener('click', () => {
       selectedScenId = btn.dataset.scid;
       grid.querySelectorAll('.scenario-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
-    });
-  });
+    })
+  );
 }
 
 function buildProbandSelect() {
   const sel = document.getElementById('sel-proband');
   const cur = sel.value;
-  sel.innerHTML = '<option value="">— Proband wählen —</option>' +
+  sel.innerHTML = '<option value="">— Teilnehmende wählen —</option>' +
     probanden.map(p => `<option value="${esc(p.id)}">SNR ${esc(p.sensor)}  (${esc(p.pseudo)})</option>`).join('');
   if (probanden.some(p => p.id === cur)) sel.value = cur;
   updateProbandBadge();
 }
 
 function updateProbandBadge() {
-  const sel   = document.getElementById('sel-proband');
+  const sel = document.getElementById('sel-proband');
   const badge = document.getElementById('proband-badge');
   const p = probanden.find(x => x.id === sel.value);
   if (p) {
@@ -285,26 +351,21 @@ function renderSessionScreen() {
   updateTimerUI();
 }
 
-// ── Timer ──────────────────────────────────────────────────────────────────
+// ── Timer ────────────────────────────────────────────────────────────────────
 function startTimer() {
   if (sessionRunning) return;
-  const probandId = document.getElementById('sel-proband').value;
-  if (!probandId)    { showToast('⚠ Proband wählen'); return; }
+  if (!document.getElementById('sel-proband').value) { showToast('⚠ Teilnehmende wählen'); return; }
   if (!selectedScenId) { showToast('⚠ Szenario wählen'); return; }
-
   timerStart      = Date.now();
   timerElapsed    = 0;
   sessionRunning  = true;
   sessionStartISO = new Date().toISOString();
   sessionEndISO   = null;
-
   document.getElementById('save-card').classList.add('hidden');
-
   timerInterval = setInterval(() => {
     timerElapsed = Math.floor((Date.now() - timerStart) / 1000);
     document.getElementById('timer-display').textContent = formatTime(timerElapsed);
   }, 500);
-
   updateTimerUI();
 }
 
@@ -315,14 +376,11 @@ function stopTimer() {
   sessionRunning = false;
   sessionEndISO  = new Date().toISOString();
   timerElapsed   = Math.max(0, Math.floor((Date.now() - timerStart) / 1000));
-
   document.getElementById('save-card').classList.remove('hidden');
   updateTimerUI();
-
-  // Scroll to save button
-  setTimeout(() => {
-    document.getElementById('save-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, 100);
+  setTimeout(() =>
+    document.getElementById('save-card').scrollIntoView({ behavior:'smooth', block:'nearest' }), 100
+  );
 }
 
 function updateTimerUI() {
@@ -331,7 +389,6 @@ function updateTimerUI() {
   const btnStart = document.getElementById('btn-start');
   const btnStop  = document.getElementById('btn-stop');
   const display  = document.getElementById('timer-display');
-
   if (sessionRunning) {
     status.innerHTML = '<span class="status-running">● LÄUFT</span>';
     const sc = scenarios.find(s => s.id === selectedScenId);
@@ -356,66 +413,53 @@ function updateTimerUI() {
 document.getElementById('btn-start').addEventListener('click', startTimer);
 document.getElementById('btn-stop').addEventListener('click', stopTimer);
 
-// Tags (session screen)
-document.querySelectorAll('#deviation-tags .tag').forEach(tag => {
-  tag.addEventListener('click', () => tag.classList.toggle('active'));
-});
+document.querySelectorAll('#deviation-tags .tag').forEach(tag =>
+  tag.addEventListener('click', () => tag.classList.toggle('active'))
+);
 
-// Save session
 document.getElementById('btn-save-session').addEventListener('click', () => {
   const probandId = document.getElementById('sel-proband').value;
-  if (!probandId)     { showToast('⚠ Kein Proband'); return; }
+  if (!probandId)       { showToast('⚠ Keine Teilnehmenden'); return; }
   if (!sessionStartISO) { showToast('⚠ Nicht gestartet'); return; }
   if (!sessionEndISO)   { showToast('⚠ Nicht gestoppt'); return; }
-
   const p  = probanden.find(x => x.id === probandId);
   const sc = scenarios.find(x => x.id === selectedScenId);
   const deviations = Array.from(document.querySelectorAll('#deviation-tags .tag.active')).map(t => t.dataset.tag);
-  const notes      = document.getElementById('session-notes').value.trim();
-
+  const notes = document.getElementById('session-notes').value.trim();
   sessions.push({
-    id:          uid(),
-    probandId,
-    pseudo:      p  ? p.pseudo   : '?',
-    sensor:      p  ? p.sensor   : '?',
-    scenarioId:  selectedScenId,
+    id: uid(), probandId,
+    pseudo:       p  ? p.pseudo  : '?',
+    sensor:       p  ? p.sensor  : '?',
+    scenarioId:   selectedScenId,
     scenarioName: sc ? sc.name   : '?',
     scenarioAbbr: sc ? sc.abbr   : '?',
-    date:        localDateStr(sessionStartISO),
-    startISO:    sessionStartISO,
-    endISO:      sessionEndISO,
-    duration_s:  timerElapsed,
-    deviations,
-    notes,
-    deviceLabel: settings.deviceLabel || '',
-    createdAt:   new Date().toISOString()
+    date:         localDateStr(sessionStartISO),
+    startISO:     sessionStartISO,
+    endISO:       sessionEndISO,
+    duration_s:   timerElapsed,
+    deviations, notes,
+    deviceLabel:  settings.deviceLabel || '',
+    createdAt:    new Date().toISOString()
   });
   save();
-
-  // Reset
-  sessionStartISO = null;
-  sessionEndISO   = null;
-  timerElapsed    = 0;
+  sessionStartISO = null; sessionEndISO = null; timerElapsed = 0;
   document.getElementById('save-card').classList.add('hidden');
   document.querySelectorAll('#deviation-tags .tag').forEach(t => t.classList.remove('active'));
   document.getElementById('session-notes').value = '';
   updateTimerUI();
-
   showToast('✓ Sitzung gespeichert');
   setTimeout(() => showScreen('log'), 600);
 });
 
-// ── SCENARIO MANAGER ───────────────────────────────────────────────────────
-document.getElementById('btn-manage-scenarios').addEventListener('click', openScenarioManager);
-document.getElementById('scenario-close').addEventListener('click', () => {
-  document.getElementById('scenario-overlay').classList.add('hidden');
-  buildScenarioGrid(); // refresh grid after possible changes
-});
-
-function openScenarioManager() {
+// ── Scenario Manager ─────────────────────────────────────────────────────────
+document.getElementById('btn-manage-scenarios').addEventListener('click', () => {
   renderScenarioManager();
   document.getElementById('scenario-overlay').classList.remove('hidden');
-}
+});
+document.getElementById('scenario-close').addEventListener('click', () => {
+  document.getElementById('scenario-overlay').classList.add('hidden');
+  buildScenarioGrid();
+});
 
 function renderScenarioManager() {
   const list = document.getElementById('scenario-list-modal');
@@ -435,28 +479,24 @@ function renderScenarioManager() {
         <button class="sm-btn del" data-action="del" data-idx="${i}">✕</button>
       </div>
     </div>`).join('');
-
-  list.querySelectorAll('[data-action]').forEach(btn => {
+  list.querySelectorAll('[data-action]').forEach(btn =>
     btn.addEventListener('click', () => {
       const idx = parseInt(btn.dataset.idx, 10);
-      const action = btn.dataset.action;
-      if (action === 'del') {
+      if (btn.dataset.action === 'del') {
         if (scenarios.length <= 1) { showToast('⚠ Mindestens 1 Szenario erforderlich'); return; }
         showConfirm('Szenario löschen',
-          `"${scenarios[idx].name}" löschen? Gespeicherte Sitzungen bleiben erhalten.`,
+          `"${scenarios[idx].name}" löschen? Sitzungen bleiben erhalten.`,
           () => {
             if (selectedScenId === scenarios[idx].id) selectedScenId = '';
             scenarios.splice(idx, 1);
-            save();
-            renderScenarioManager();
+            save(); renderScenarioManager();
           });
-      } else if (action === 'up') {
+      } else if (btn.dataset.action === 'up') {
         [scenarios[idx], scenarios[idx-1]] = [scenarios[idx-1], scenarios[idx]];
-        save();
-        renderScenarioManager();
+        save(); renderScenarioManager();
       }
-    });
-  });
+    })
+  );
 }
 
 document.getElementById('btn-add-scenario').addEventListener('click', () => {
@@ -475,18 +515,18 @@ document.getElementById('btn-add-scenario').addEventListener('click', () => {
   showToast('✓ Szenario hinzugefügt');
 });
 
-// ── LOG SCREEN ─────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// LOG SCREEN
+// ══════════════════════════════════════════════════════════════════════════════
 function buildLogFilters() {
   const stSel = document.getElementById('log-filter-station');
   const prSel = document.getElementById('log-filter-proband');
   const stVal = stSel.value;
   const prVal = prSel.value;
-
   stSel.innerHTML = '<option value="all">Alle Szenarien</option>' +
     scenarios.map(sc => `<option value="${esc(sc.id)}">${esc(sc.icon)} ${esc(sc.name)}</option>`).join('');
-  prSel.innerHTML = '<option value="all">Alle Probanden</option>' +
+  prSel.innerHTML = '<option value="all">Alle Teilnehmenden</option>' +
     probanden.map(p => `<option value="${esc(p.id)}">${esc(p.pseudo)} (${esc(p.sensor)})</option>`).join('');
-
   if (scenarios.find(s => s.id === stVal)) stSel.value = stVal;
   if (probanden.find(p => p.id === prVal)) prSel.value = prVal;
 }
@@ -501,9 +541,9 @@ function getFilteredSessions() {
 
 function renderLog() {
   buildLogFilters();
-  const list    = document.getElementById('log-list');
-  const empty   = document.getElementById('log-empty');
-  const label   = document.getElementById('log-count-label');
+  const list     = document.getElementById('log-list');
+  const empty    = document.getElementById('log-empty');
+  const label    = document.getElementById('log-count-label');
   const filtered = getFilteredSessions();
   label.textContent = `SITZUNGEN (${filtered.length})`;
   if (!filtered.length) {
@@ -515,10 +555,9 @@ function renderLog() {
   list.innerHTML = filtered.map(s => {
     const hasDev  = s.deviations && s.deviations.length > 0;
     const devLine = hasDev ? `<div class="log-dev">⚑  ${esc(s.deviations.join('  ·  '))}</div>` : '';
-    // Use scenarioAbbr if available, fall back gracefully
-    const abbr = s.scenarioAbbr || s.scenarioName || s.scenario || '?';
     const sc   = scenarios.find(x => x.id === s.scenarioId);
     const icon = sc ? sc.icon + ' ' : '';
+    const abbr = s.scenarioAbbr || s.scenarioName || '?';
     return `<div class="log-entry${hasDev ? ' has-deviation' : ''}" data-id="${esc(s.id)}">
       <div class="log-row-top">
         <span class="log-id">${esc(s.pseudo)}  ·  ${icon}${esc(abbr)}</span>
@@ -528,48 +567,46 @@ function renderLog() {
       ${devLine}
     </div>`;
   }).join('');
-  list.querySelectorAll('.log-entry').forEach(el => {
-    el.addEventListener('click', () => openSessionDetail(el.dataset.id));
-  });
+  list.querySelectorAll('.log-entry').forEach(el =>
+    el.addEventListener('click', () => openSessionDetail(el.dataset.id))
+  );
 }
 
 document.getElementById('log-filter-station').addEventListener('change', renderLog);
 document.getElementById('log-filter-proband').addEventListener('change', renderLog);
 
-// ── SESSION DETAIL ─────────────────────────────────────────────────────────
+// ── Session Detail ───────────────────────────────────────────────────────────
 function openSessionDetail(id) {
   const s = sessions.find(x => x.id === id);
   if (!s) return;
   detailSessionId = id;
   const sc = scenarios.find(x => x.id === s.scenarioId);
   document.getElementById('detail-title').textContent = s.pseudo + '  ·  ' + (sc ? sc.abbr : s.scenarioAbbr || '?');
-  const rows = [
-    ['Datum',         s.date],
-    ['Pseudonym',     s.pseudo],
-    ['Sensoriknummer',s.sensor],
-    ['Szenario',      (sc ? sc.icon + ' ' : '') + (sc ? sc.name : s.scenarioName || '?')],
-    ['Start',         localTimeStr(s.startISO)],
-    ['Ende',          localTimeStr(s.endISO)],
-    ['Dauer',         formatTime(s.duration_s || 0)],
-    ['Abweichungen',  s.deviations && s.deviations.length ? s.deviations.join(', ') : '—'],
-    ['Anmerkungen',   s.notes || '—'],
-    ['Gerät/Betreuer',s.deviceLabel || '—'],
-  ];
-  document.getElementById('detail-content').innerHTML =
-    rows.map(([k, v]) => `<div class="detail-row"><div class="detail-key">${esc(k)}</div><div class="detail-val">${esc(v)}</div></div>`).join('');
+  document.getElementById('detail-content').innerHTML = [
+    ['Datum',          s.date],
+    ['Pseudonym',      s.pseudo],
+    ['Sensoriknummer', s.sensor],
+    ['Szenario',       (sc ? sc.icon + ' ' : '') + (sc ? sc.name : s.scenarioName || '?')],
+    ['Start',          localTimeStr(s.startISO)],
+    ['Ende',           localTimeStr(s.endISO)],
+    ['Dauer',          formatTime(s.duration_s || 0)],
+    ['Abweichungen',   s.deviations?.length ? s.deviations.join(', ') : '—'],
+    ['Anmerkungen',    s.notes || '—'],
+    ['Gerät/Betreuung',s.deviceLabel || '—'],
+  ].map(([k,v]) => `<div class="detail-row"><div class="detail-key">${esc(k)}</div><div class="detail-val">${esc(v)}</div></div>`).join('');
   document.getElementById('detail-overlay').classList.remove('hidden');
 }
 
-document.getElementById('detail-close').addEventListener('click', () => {
+document.getElementById('detail-close').addEventListener('click', closeDetailOverlay);
+document.getElementById('detail-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('detail-overlay')) closeDetailOverlay();
+});
+function closeDetailOverlay() {
   document.getElementById('detail-overlay').classList.add('hidden');
   detailSessionId = null;
-});
-document.getElementById('detail-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('detail-overlay')) {
-    document.getElementById('detail-overlay').classList.add('hidden');
-    detailSessionId = null;
-  }
-});
+}
+
+// ── Session Delete (from detail) ─────────────────────────────────────────────
 document.getElementById('btn-delete-session').addEventListener('click', () => {
   if (!detailSessionId) return;
   const s = sessions.find(x => x.id === detailSessionId);
@@ -578,14 +615,17 @@ document.getElementById('btn-delete-session').addEventListener('click', () => {
     () => {
       sessions = sessions.filter(x => x.id !== detailSessionId);
       save();
+      // Close BOTH detail and edit overlays
       document.getElementById('detail-overlay').classList.add('hidden');
+      document.getElementById('edit-overlay').classList.add('hidden');
       detailSessionId = null;
       renderLog();
       showToast('Sitzung gelöscht');
-    });
+    }
+  );
 });
 
-// ── SESSION EDIT ───────────────────────────────────────────────────────────
+// ── Session Edit ─────────────────────────────────────────────────────────────
 document.getElementById('btn-edit-session').addEventListener('click', () => {
   if (!detailSessionId) return;
   openEditSession(detailSessionId);
@@ -595,83 +635,96 @@ function openEditSession(id) {
   const s = sessions.find(x => x.id === id);
   if (!s) return;
 
-  // Populate proband select
+  // Teilnehmende select — handle case where person was deleted
   const prSel = document.getElementById('edit-proband');
   prSel.innerHTML = probanden.map(p =>
     `<option value="${esc(p.id)}"${p.id === s.probandId ? ' selected' : ''}>${esc(p.pseudo)} (${esc(p.sensor)})</option>`
   ).join('');
+  if (!probanden.find(p => p.id === s.probandId)) {
+    prSel.innerHTML = `<option value="${esc(s.probandId)}" selected>${esc(s.pseudo)} (gelöscht)</option>` + prSel.innerHTML;
+  }
 
-  // Populate scenario select
+  // Scenario select
   const scSel = document.getElementById('edit-scenario');
   scSel.innerHTML = scenarios.map(sc =>
     `<option value="${esc(sc.id)}"${sc.id === s.scenarioId ? ' selected' : ''}>${esc(sc.icon)} ${esc(sc.name)}</option>`
   ).join('');
 
-  // Times — convert to local time for input
-  document.getElementById('edit-start').value = isoToLocalInput(s.startISO);
-  document.getElementById('edit-end').value   = isoToLocalInput(s.endISO);
+  // Show date as read-only info — no date editing allowed
+  document.getElementById('edit-date-info').textContent = '📅 ' + s.date + ' (Datum nicht änderbar)';
+
+  // Time inputs use LOCAL time extracted from ISO
+  document.getElementById('edit-start-time').value = isoToTimeInput(s.startISO);
+  document.getElementById('edit-end-time').value   = isoToTimeInput(s.endISO);
 
   // Notes
   document.getElementById('edit-notes').value = s.notes || '';
 
   // Tags
-  document.querySelectorAll('#edit-deviation-tags .tag').forEach(tag => {
-    tag.classList.toggle('active', (s.deviations || []).includes(tag.dataset.tag));
-  });
+  document.querySelectorAll('#edit-deviation-tags .tag').forEach(tag =>
+    tag.classList.toggle('active', (s.deviations || []).includes(tag.dataset.tag))
+  );
 
+  // Switch overlays
   document.getElementById('detail-overlay').classList.add('hidden');
   document.getElementById('edit-overlay').classList.remove('hidden');
 }
 
-// Edit tags
-document.querySelectorAll('#edit-deviation-tags .tag').forEach(tag => {
-  tag.addEventListener('click', () => tag.classList.toggle('active'));
+document.getElementById('edit-close').addEventListener('click', closeEditOverlay);
+document.getElementById('edit-cancel').addEventListener('click', closeEditOverlay);
+document.getElementById('edit-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('edit-overlay')) closeEditOverlay();
 });
+function closeEditOverlay() {
+  document.getElementById('edit-overlay').classList.add('hidden');
+}
 
-document.getElementById('edit-close').addEventListener('click', () => {
-  document.getElementById('edit-overlay').classList.add('hidden');
-});
-document.getElementById('edit-cancel').addEventListener('click', () => {
-  document.getElementById('edit-overlay').classList.add('hidden');
-});
+document.querySelectorAll('#edit-deviation-tags .tag').forEach(tag =>
+  tag.addEventListener('click', () => tag.classList.toggle('active'))
+);
 
 document.getElementById('btn-save-edit').addEventListener('click', () => {
-  if (!detailSessionId) return;
+  // Guard: must have a session selected
+  if (!detailSessionId) { showToast('⚠ Keine Sitzung ausgewählt'); return; }
   const idx = sessions.findIndex(x => x.id === detailSessionId);
-  if (idx === -1) return;
+  if (idx === -1) { showToast('⚠ Sitzung nicht gefunden'); return; }
 
+  const s          = sessions[idx];
   const probandId  = document.getElementById('edit-proband').value;
   const scenarioId = document.getElementById('edit-scenario').value;
-  const startVal   = document.getElementById('edit-start').value;
-  const endVal     = document.getElementById('edit-end').value;
+  const startTime  = document.getElementById('edit-start-time').value;
+  const endTime    = document.getElementById('edit-end-time').value;
   const notes      = document.getElementById('edit-notes').value.trim();
   const deviations = Array.from(document.querySelectorAll('#edit-deviation-tags .tag.active')).map(t => t.dataset.tag);
 
-  if (!startVal || !endVal) { showToast('⚠ Zeiten unvollständig'); return; }
+  // Validate times
+  if (!startTime) { showToast('⚠ Startzeit eingeben'); return; }
+  if (!endTime)   { showToast('⚠ Endzeit eingeben'); return; }
 
-  const startISO = localInputToIso(startVal);
-  const endISO   = localInputToIso(endVal);
+  // Rebuild ISO: keep original DATE, change only the TIME
+  const newStartISO = rebuildISO(s.startISO, startTime);
+  const newEndISO   = rebuildISO(s.endISO || s.startISO, endTime);
 
-  if (new Date(endISO) <= new Date(startISO)) { showToast('⚠ Ende muss nach Start liegen'); return; }
+  if (!newStartISO || !newEndISO) { showToast('⚠ Ungültige Zeitangabe'); return; }
+  if (new Date(newEndISO) <= new Date(newStartISO)) { showToast('⚠ Endzeit muss nach Startzeit liegen'); return; }
 
-  const p  = probanden.find(x => x.id === probandId);
-  const sc = scenarios.find(x => x.id === scenarioId);
-  const dur = Math.round((new Date(endISO) - new Date(startISO)) / 1000);
+  const dur = Math.round((new Date(newEndISO) - new Date(newStartISO)) / 1000);
+  const p   = probanden.find(x => x.id === probandId);
+  const sc  = scenarios.find(x => x.id === scenarioId);
 
   sessions[idx] = {
-    ...sessions[idx],
+    ...s,
     probandId,
-    pseudo:       p  ? p.pseudo  : sessions[idx].pseudo,
-    sensor:       p  ? p.sensor  : sessions[idx].sensor,
+    pseudo:       p  ? p.pseudo : s.pseudo,
+    sensor:       p  ? p.sensor : s.sensor,
     scenarioId,
-    scenarioName: sc ? sc.name   : sessions[idx].scenarioName,
-    scenarioAbbr: sc ? sc.abbr   : sessions[idx].scenarioAbbr,
-    startISO,
-    endISO,
-    date:         localDateStr(startISO),
+    scenarioName: sc ? sc.name  : s.scenarioName,
+    scenarioAbbr: sc ? sc.abbr  : s.scenarioAbbr,
+    startISO:     newStartISO,
+    endISO:       newEndISO,
+    date:         localDateStr(newStartISO),
     duration_s:   dur,
-    notes,
-    deviations,
+    notes, deviations,
     editedAt:     new Date().toISOString()
   };
 
@@ -682,7 +735,9 @@ document.getElementById('btn-save-edit').addEventListener('click', () => {
   showToast('✓ Sitzung aktualisiert');
 });
 
-// ── EXPORT SCREEN ──────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// EXPORT SCREEN
+// ══════════════════════════════════════════════════════════════════════════════
 function buildExportFilters() {
   const sel = document.getElementById('export-filter-station');
   const cur = sel.value;
@@ -690,103 +745,75 @@ function buildExportFilters() {
     scenarios.map(sc => `<option value="${esc(sc.id)}">${esc(sc.icon)} ${esc(sc.name)}</option>`).join('');
   if (scenarios.find(s => s.id === cur)) sel.value = cur;
 }
-
 function getExportSessions() {
-  const stVal = document.getElementById('export-filter-station').value;
-  return stVal === 'all' ? sessions : sessions.filter(s => s.scenarioId === stVal);
+  const v = document.getElementById('export-filter-station').value;
+  return v === 'all' ? sessions : sessions.filter(s => s.scenarioId === v);
 }
-
 function renderStats() {
   const data  = getExportSessions();
   const total = data.length;
-  const avgDur = total > 0 ? Math.round(data.reduce((a, s) => a + (s.duration_s || 0), 0) / total) : 0;
-  const devCount = data.filter(s => s.deviations && s.deviations.length > 0).length;
+  const avg   = total > 0 ? Math.round(data.reduce((a,s) => a + (s.duration_s||0), 0) / total) : 0;
+  const devs  = data.filter(s => s.deviations?.length > 0).length;
   document.getElementById('stats-grid').innerHTML = `
     <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Sitzungen</div></div>
-    <div class="stat-card"><div class="stat-value">${formatTime(avgDur)}</div><div class="stat-label">⌀ Dauer</div></div>
-    <div class="stat-card"><div class="stat-value">${devCount}</div><div class="stat-label">Abweich.</div></div>`;
+    <div class="stat-card"><div class="stat-value">${formatTime(avg)}</div><div class="stat-label">⌀ Dauer</div></div>
+    <div class="stat-card"><div class="stat-value">${devs}</div><div class="stat-label">Abweich.</div></div>`;
 }
-
 function renderExport() {
   buildExportFilters();
   renderStats();
   document.getElementById('inp-device-label').value = settings.deviceLabel || '';
-  const lastInfo = document.getElementById('last-export-info');
-  lastInfo.textContent = settings.lastExport ? localDatetimeStr(settings.lastExport) : 'Noch kein Export durchgeführt';
+  document.getElementById('last-export-info').textContent =
+    settings.lastExport ? localDatetimeStr(settings.lastExport) : 'Noch kein Export durchgeführt';
 }
-
 document.getElementById('export-filter-station').addEventListener('change', renderStats);
 document.getElementById('inp-device-label').addEventListener('change', e => {
-  settings.deviceLabel = e.target.value.trim();
-  save();
+  settings.deviceLabel = e.target.value.trim(); save();
 });
 
-function escCsvField(val) {
+function escCsv(val) {
   const s = String(val ?? '');
-  return (s.includes(',') || s.includes('"') || s.includes('\n'))
-    ? '"' + s.replace(/"/g, '""') + '"' : s;
+  return (s.includes(',') || s.includes('"') || s.includes('\n')) ? '"' + s.replace(/"/g,'""') + '"' : s;
 }
-
 document.getElementById('btn-export-csv').addEventListener('click', () => {
   const data = getExportSessions();
-  if (!data.length) { showToast('⚠ Keine Daten zum Exportieren'); return; }
-  const headers = ['ID','Datum','Pseudonym','Sensoriknummer','Szenario','Szenario_Abkuerzung',
-                   'Start_ISO','Ende_ISO','Start_Uhrzeit','Ende_Uhrzeit',
-                   'Dauer_s','Dauer_mm_ss','Abweichungen','Anmerkungen','Geraet_Betreuer'];
+  if (!data.length) { showToast('⚠ Keine Daten'); return; }
+  const hdr = ['ID','Datum','Pseudonym','Sensoriknummer','Szenario','Szenario_Abkuerzung',
+                'Start_ISO','Ende_ISO','Start_Uhrzeit','Ende_Uhrzeit',
+                'Dauer_s','Dauer_mm_ss','Abweichungen','Anmerkungen','Geraet_Betreuung'];
   const rows = data.map(s => [
     s.id, s.date, s.pseudo, s.sensor,
-    s.scenarioName || s.scenario || '?',
-    s.scenarioAbbr || '?',
+    s.scenarioName||'?', s.scenarioAbbr||'?',
     s.startISO, s.endISO,
     localTimeStr(s.startISO), localTimeStr(s.endISO),
-    s.duration_s || 0, formatTime(s.duration_s || 0),
-    (s.deviations || []).join('; '),
-    s.notes || '',
-    s.deviceLabel || ''
-  ].map(escCsvField).join(','));
-  const csv = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
-  downloadFile(csv, `studylog_${dateSlug()}.csv`, 'text/csv;charset=utf-8;');
-  recordExport();
-  showToast('✓ CSV: ' + data.length + ' Sitzungen');
+    s.duration_s||0, formatTime(s.duration_s||0),
+    (s.deviations||[]).join('; '), s.notes||'', s.deviceLabel||''
+  ].map(escCsv).join(','));
+  downloadFile('\uFEFF' + [hdr.join(','),...rows].join('\r\n'), `studylog_${dateSlug()}.csv`, 'text/csv;charset=utf-8;');
+  recordExport(); showToast('✓ CSV: ' + data.length + ' Sitzungen');
 });
-
 document.getElementById('btn-export-json').addEventListener('click', () => {
   const data = getExportSessions();
   if (!data.length) { showToast('⚠ Keine Daten'); return; }
-  // Add human-readable local times to JSON export
-  const enriched = data.map(s => ({
-    ...s,
-    start_local: localTimeStr(s.startISO),
-    end_local:   localTimeStr(s.endISO),
-    date_local:  s.date
-  }));
+  const enriched = data.map(s => ({ ...s, start_local: localTimeStr(s.startISO), end_local: localTimeStr(s.endISO) }));
   downloadFile(JSON.stringify(enriched, null, 2), `studylog_${dateSlug()}.json`, 'application/json');
-  recordExport();
-  showToast('✓ JSON: ' + data.length + ' Sitzungen');
+  recordExport(); showToast('✓ JSON: ' + data.length + ' Sitzungen');
 });
-
-function dateSlug() {
-  const d = new Date();
-  return d.toISOString().slice(0, 10).replace(/-/g, '');
-}
+function dateSlug() { return new Date().toISOString().slice(0,10).replace(/-/g,''); }
 function downloadFile(content, filename, type) {
-  const blob = new Blob([content], { type });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([content], { type })), download: filename
+  });
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 function recordExport() {
-  settings.lastExport = new Date().toISOString();
-  save();
+  settings.lastExport = new Date().toISOString(); save();
   document.getElementById('last-export-info').textContent = localDatetimeStr(settings.lastExport);
 }
-
 document.getElementById('btn-clear-data').addEventListener('click', () => {
   showConfirm('⚠ Alle Daten löschen',
-    'Alle Probanden und Sitzungsdaten werden unwiderruflich gelöscht. Vorher exportieren!',
+    'Alle Teilnehmenden und Sitzungsdaten werden unwiderruflich gelöscht. Vorher exportieren!',
     () => {
       probanden = []; sessions = []; settings.lastExport = null;
       save(); renderProbanden(); renderLog(); renderExport();
@@ -794,16 +821,11 @@ document.getElementById('btn-clear-data').addEventListener('click', () => {
     });
 });
 
-// ── INIT ───────────────────────────────────────────────────────────────────
+// ── INIT ─────────────────────────────────────────────────────────────────────
 load();
-
-// Default first scenario selection
 if (scenarios.length) selectedScenId = scenarios[0].id;
-
 renderProbanden();
 buildScenarioGrid();
 buildProbandSelect();
-
-// Topbar: today's date
 document.getElementById('topbar-sub').textContent =
   new Date().toLocaleDateString('de-DE', { weekday:'short', year:'numeric', month:'short', day:'numeric' });
