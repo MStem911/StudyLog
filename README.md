@@ -20,13 +20,6 @@ Entwickelt für die Universität der Bundeswehr München.
 - Export enthält nur: Pseudonym, Sensoriknummer, Station, Zeitstempel, Szenario, Abweichungen, Notizen
 - Zuordnungsliste Pseudonym ↔ Klarname liegt separat bei der Studienleitung
 
-## GitHub Pages Deployment
-
-1. Repository auf GitHub anlegen (privat)
-2. Alle Dateien pushen
-3. Unter `Settings → Pages → Source` den Branch `main` und Ordner `/ (root)` wählen
-4. Nach ~1 Minute ist die App unter `https://<username>.github.io/<reponame>/` erreichbar
-
 ### Auf iPhone installieren
 
 1. App-URL in Safari öffnen
