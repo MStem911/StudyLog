@@ -85,6 +85,8 @@ body {
 .topbar-titles { display: flex; flex-direction: column; gap: 1px; }
 .topbar-title { font-size: 15px; font-weight: 700; color: var(--text1); line-height: 1.2; }
 .topbar-sub   { font-size: 10px; color: var(--text3); line-height: 1.2; }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+.app-version { font-size: 11px; color: var(--text3); font-weight: 600; letter-spacing: 0.03em; }
 .lock-icon { font-size: 14px; opacity: 0.6; }
 
 /* ── Screen Container ─────────────────────────────────────────────────── */
@@ -474,6 +476,3 @@ input[type="time"] { color-scheme: dark; }
   width: 100%;
   margin-bottom: 0;
 }
-
-.topbar-right { display: flex; align-items: center; gap: 8px; }
-.app-version { font-size: 11px; color: var(--text3); font-weight: 600; }
