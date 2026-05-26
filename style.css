@@ -255,11 +255,13 @@ input[type="datetime-local"] { color-scheme: dark; }
 .item-list { display: flex; flex-direction: column; gap: 8px; }
 
 .proband-item {
+  width: 100%;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 12px 14px;
   display: flex; align-items: center; gap: 12px;
   cursor: pointer; -webkit-tap-highlight-color: transparent;
   touch-action: manipulation; transition: background 0.12s;
+  text-align: left; font-family: inherit; font-size: inherit; color: inherit;
 }
 .proband-item:active { background: var(--surface2); }
 .avatar {
@@ -302,11 +304,13 @@ input[type="datetime-local"] { color-scheme: dark; }
 
 /* ── Log Entry ────────────────────────────────────────────────────────── */
 .log-entry {
+  width: 100%;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 12px 14px;
   border-left: 3px solid var(--purple-d);
   cursor: pointer; -webkit-tap-highlight-color: transparent;
   touch-action: manipulation; transition: background 0.12s;
+  text-align: left; font-family: inherit; font-size: inherit; color: inherit;
 }
 .log-entry:active { background: var(--surface2); }
 .log-entry.has-deviation { border-left-color: var(--coral); }
