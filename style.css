@@ -57,7 +57,8 @@ body {
   height: 100dvh;
   max-width: 430px;
   margin: 0 auto;
-  overflow: hidden;
+  /* overflow:hidden blocks touch events in iOS PWA — use clip instead */
+  overflow: clip;
   position: relative;
 }
 
@@ -88,13 +89,14 @@ body {
 .lock-icon { font-size: 14px; opacity: 0.6; }
 
 /* ── Screen Container ─────────────────────────────────────────────────── */
-.screen-container { flex: 1; overflow: hidden; position: relative; }
+.screen-container { flex: 1; overflow: clip; position: relative; min-height: 0; }
 
 .screen {
   position: absolute; inset: 0;
   overflow-y: auto; overflow-x: hidden;
   display: none;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 .screen.active { display: block; }
 
@@ -258,7 +260,9 @@ input[type="datetime-local"] { color-scheme: dark; }
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 12px 14px;
   display: flex; align-items: center; gap: 12px;
-  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
   touch-action: manipulation; transition: background 0.12s;
 }
 .proband-item:active { background: var(--surface2); }
@@ -305,7 +309,9 @@ input[type="datetime-local"] { color-scheme: dark; }
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 12px 14px;
   border-left: 3px solid var(--purple-d);
-  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  user-select: none; -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
   touch-action: manipulation; transition: background 0.12s;
 }
 .log-entry:active { background: var(--surface2); }
@@ -469,4 +475,26 @@ input[type="time"] { color-scheme: dark; }
 .tag-edit-input {
   width: 100%;
   margin-bottom: 0;
+}
+
+/* ── Warning button & danger zone hints ──────────────────────────────── */
+.btn-warning {
+  background: var(--amber-bg);
+  border-color: var(--amber);
+  color: var(--amber-txt);
+}
+.danger-hint {
+  font-size: 11px;
+  color: var(--text3);
+  text-align: center;
+  padding: 4px 8px 8px;
+  line-height: 1.4;
+}
+
+/* ── iOS PWA: ensure all interactive elements receive touch events ────── */
+button, select, input, textarea, [role="button"] {
+  /* Explicit cursor prevents iOS from ignoring tap on some elements */
+  cursor: pointer;
+  /* Ensure element is not accidentally removed from touch hit testing */
+  -webkit-tap-highlight-color: transparent;
 }
