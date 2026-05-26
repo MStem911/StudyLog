@@ -255,11 +255,13 @@ input[type="datetime-local"] { color-scheme: dark; }
 .item-list { display: flex; flex-direction: column; gap: 8px; }
 
 .proband-item {
+  width: 100%;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 12px 14px;
   display: flex; align-items: center; gap: 12px;
   cursor: pointer; -webkit-tap-highlight-color: transparent;
   touch-action: manipulation; transition: background 0.12s;
+  text-align: left; font-family: inherit; font-size: inherit; color: inherit;
 }
 .proband-item:active { background: var(--surface2); }
 .avatar {
@@ -277,9 +279,7 @@ input[type="datetime-local"] { color-scheme: dark; }
   font-size: 10px; font-weight: 600; padding: 4px 10px;
   border-radius: 999px; flex-shrink: 0;
 }
-.badge-done    { background: var(--teal-bg);  color: var(--teal-txt); }
-.badge-partial { background: var(--amber-bg); color: var(--amber-txt); }
-.badge-open    { background: var(--surface3); color: var(--text3); }
+.badge-count { background: var(--surface3); color: var(--text2); }
 
 /* ── Scenario Grid ────────────────────────────────────────────────────── */
 .scenario-grid { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -304,11 +304,13 @@ input[type="datetime-local"] { color-scheme: dark; }
 
 /* ── Log Entry ────────────────────────────────────────────────────────── */
 .log-entry {
+  width: 100%;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 12px 14px;
   border-left: 3px solid var(--purple-d);
   cursor: pointer; -webkit-tap-highlight-color: transparent;
   touch-action: manipulation; transition: background 0.12s;
+  text-align: left; font-family: inherit; font-size: inherit; color: inherit;
 }
 .log-entry:active { background: var(--surface2); }
 .log-entry.has-deviation { border-left-color: var(--coral); }
