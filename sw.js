@@ -1,4 +1,4 @@
-const CACHE = 'studylog-v11';
+const CACHE = 'studylog-v12';
 const ASSETS = [
   './',
   './index.html',
