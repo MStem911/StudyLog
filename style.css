@@ -277,9 +277,7 @@ input[type="datetime-local"] { color-scheme: dark; }
   font-size: 10px; font-weight: 600; padding: 4px 10px;
   border-radius: 999px; flex-shrink: 0;
 }
-.badge-done    { background: var(--teal-bg);  color: var(--teal-txt); }
-.badge-partial { background: var(--amber-bg); color: var(--amber-txt); }
-.badge-open    { background: var(--surface3); color: var(--text3); }
+.badge-count { background: var(--surface3); color: var(--text2); }
 
 /* ── Scenario Grid ────────────────────────────────────────────────────── */
 .scenario-grid { display: flex; gap: 8px; flex-wrap: wrap; }
